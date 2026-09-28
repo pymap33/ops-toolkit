@@ -1,6 +1,6 @@
 # Tool Spec — Make-vs-Buy / Total Cost of Ownership (TCO) Model
 
-**Plan ref:** 2.2 · **Date:** 2026-09-28 · **Status:** draft — awaiting review
+**Plan ref:** 2.2 · **Date:** 2026-09-28 · **Status:** approved 2026-09-28 (linear version). Extensions tracked as 2.2b in PLAN.md
 
 ## 1. Problem
 
@@ -89,7 +89,7 @@ Shared: Q = 3,500 units/yr, horizon 5 years, discount rate 10% (capital recovery
 ## 8. Non-goals / when NOT to use this
 
 - **Two options only.** No multi-supplier or three-way comparison.
-- **Linear costs.** No volume discounts, price breaks or step-fixed costs (a second machine at higher volume). Above the capacity of your single-machine assumption, the linear model will understate Make's cost.
+- **Linear costs (by design, v1).** No volume discounts, price breaks or step-fixed costs (a second machine at higher volume). Above the capacity of your single-machine assumption, the linear model will understate Make's cost. Planned extension: 2.2b (step-fixed costs first, then price breaks), which would replace the single break-even with an exact crossover list.
 - **Flat volume.** No demand growth or seasonality.
 - **No taxes, FX or financing detail.** Pre-tax, single currency.
 - **Strategic factors are not priced.** Intellectual property, core competence, supplier dependence and control are qualitative. The risk premium is a blunt stand-in.
