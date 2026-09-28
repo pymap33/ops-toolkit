@@ -1,6 +1,6 @@
 # Tool Spec — Cost of Poor Quality (COPQ) Calculator
 
-**Plan ref:** 1.1 · **Date:** 2026-09-27 · **Status:** draft — awaiting review
+**Plan ref:** 1.1 · **Date:** 2026-09-27 · **Status:** approved 2026-09-27; library built and tested, browser page built (live-browser check pending)
 
 ## 1. Problem
 

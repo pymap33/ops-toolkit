@@ -8,7 +8,7 @@ Cost-modeling and operations-finance calculators for the space where Lean/Six Si
 
 | Tool | Status |
 |---|---|
-| Cost of Poor Quality (COPQ) calculator | Planned -- first build |
+| [Cost of Poor Quality (COPQ) calculator](web/calculator-copq.html) | Built; `opstoolkit/copq.py`, spec in `docs/specs/01-copq.md` |
 
 A "Which tool do I need?" table will go here as tools ship.
 

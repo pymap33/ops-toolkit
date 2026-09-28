@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cost of Poor Quality (COPQ) Calculator</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f7f7f5; --fg:#1a1a1a; --card:#fff; --border:#d9d9d4; --accent:#2f6f4f; --muted:#666; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15161a; --fg:#e8e8e6; --card:#1e2024; --border:#33353a; --accent:#6fbf94; --muted:#9a9a98; --bad:#f2b8b5; }
+  }
+  body { background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif; margin:0; padding:2rem 1rem; }
+  main { max-width:900px; margin:0 auto; }
+  a { color:var(--accent); }
+  h1 { font-size:1.4rem; margin:.4rem 0 .25rem; }
+  h2 { font-size:1.05rem; margin:0 0 .6rem; }
+  p.sub { color:var(--muted); margin-top:0; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:1.1rem; margin-bottom:1rem; }
+  label { display:block; font-size:.85rem; margin-bottom:.2rem; }
+  input, select { box-sizing:border-box; padding:.4rem .5rem; border:1px solid var(--border); border-radius:6px; background:transparent; color:inherit; font:inherit; }
+  .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.6rem 1rem; }
+  .fields input { width:100%; }
+  .row { display:grid; grid-template-columns:1.6fr 1.2fr .9fr 1fr 1fr .7fr auto; gap:.4rem; align-items:end; margin-bottom:.5rem; }
+  .row input, .row select { width:100%; }
+  .row .hd { font-size:.75rem; color:var(--muted); }
+  @media (max-width:720px) { .row { grid-template-columns:1fr 1fr; } }
+  button { background:var(--accent); color:#fff; border:none; padding:.5rem 1rem; border-radius:6px; font:inherit; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.5; cursor:wait; }
+  .actions { display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.4rem; }
+  table { border-collapse:collapse; width:100%; font-size:.85rem; margin:.5rem 0; }
+  td, th { border:1px solid var(--border); padding:.3rem .5rem; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  .kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.6rem; margin-bottom:.6rem; }
+  .kpi div { border:1px solid var(--border); border-radius:8px; padding:.5rem .7rem; }
+  .kpi b { display:block; font-size:1.15rem; }
+  .kpi span { font-size:.78rem; color:var(--muted); }
+  #error { color:var(--bad); font-weight:600; }
+  #status { font-size:.8rem; color:var(--muted); }
+  .decision { border-left:4px solid var(--accent); padding:.4rem .8rem; margin:.6rem 0; }
+  ul.limits { margin:.3rem 0 0 1.1rem; padding:0; }
+  footer { color:var(--muted); font-size:.82rem; margin-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+<a href="index.html">&larr; All tools</a>
+<h1>Cost of Poor Quality (COPQ) Calculator</h1>
+<p class="sub">Price scrap, rework, inspection and complaints in annual dollars, then test an improvement project's payback and NPV. Runs entirely in your browser.</p>
+<p id="status">Loading calculator engine&hellip;</p>
+
+<div class="card">
+  <h2>1. Company context</h2>
+  <div class="fields">
+    <div><label for="revenue">Annual revenue ($, optional)</label><input id="revenue" type="number" min="0" step="any"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2. Cost line items</h2>
+  <p class="sub">Enter each cost either as a direct annual dollar amount, or as units per year &times; cost per unit. Reduction % is how much of that line the project removes (0 if none).</p>
+  <div id="rows"></div>
+  <div class="actions">
+    <button type="button" class="secondary" id="addRow">+ Add line</button>
+    <button type="button" class="secondary" id="loadExample">Load worked example</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>3. Improvement project <label style="display:inline;margin-left:.6rem"><input type="checkbox" id="useProject" style="width:auto"> include</label></h2>
+  <div class="fields" id="projectFields">
+    <div><label for="oneTime">One-time project cost ($)</label><input id="oneTime" type="number" min="0" step="any" value="0"></div>
+    <div><label for="addedSpend">Added annual prevention/appraisal spend ($/yr)</label><input id="addedSpend" type="number" min="0" step="any" value="0"></div>
+    <div><label for="horizon">Horizon (years, 1&ndash;10)</label><input id="horizon" type="number" min="1" max="10" step="1" value="3"></div>
+    <div><label for="discount">Discount rate (%) &mdash; your assumption</label><input id="discount" type="number" min="0" step="any" value="10"></div>
+  </div>
+</div>
+
+<div class="actions"><button type="button" id="calc" disabled>Calculate</button></div>
+<p id="error"></p>
+
+<div id="results"></div>
+
+<div class="card">
+  <h2>When NOT to use this</h2>
+  <ul class="limits">
+    <li>It does not measure defects. The reduction percentages are your assumptions, not predictions.</li>
+    <li>No "hidden factory" multiplier is applied. Enter hidden costs as your own line items only if you can defend them.</li>
+    <li>Lost customers and brand damage are not estimated unless you enter them as a line.</li>
+    <li>Savings are assumed flat, arriving at the end of each year. There is no ramp-up period.</li>
+    <li>Illustrative business-case tool only, not for regulated cost reporting.</li>
+  </ul>
+</div>
+
+<footer>Framework: prevention&ndash;appraisal&ndash;failure (PAF) classification per <a href="https://asq.org/quality-resources/cost-of-quality">ASQ</a>. Educational tool, not professional advice. Inputs are processed locally in your browser and are never transmitted.</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<script type="module">
+import { loadPackage, money, pct } from "./shared/loader.js";
+
+const CATEGORY_LABELS = {
+  prevention: "Prevention",
+  appraisal: "Appraisal",
+  internal_failure: "Internal failure",
+  external_failure: "External failure",
+};
+
+const EXAMPLE = {
+  revenue: 50000000,
+  items: [
+    ["Training", "prevention", "direct", 60000, null, 0],
+    ["Process FMEA / QMS upkeep", "prevention", "direct", 90000, null, 0],
+    ["Incoming inspection", "appraisal", "direct", 120000, null, 0],
+    ["Final inspection", "appraisal", "direct", 180000, null, 0],
+    ["Calibration", "appraisal", "direct", 40000, null, 0],
+    ["Scrap", "internal_failure", "driver", 12000, 85, 40],
+    ["Rework", "internal_failure", "driver", 8000, 30, 50],
+    ["Customer returns", "external_failure", "driver", 900, 210, 30],
+    ["Warranty", "external_failure", "direct", 110000, null, 30],
+  ],
+  project: { oneTime: 250000, addedSpend: 60000, horizon: 3, discount: 10 },
+};
+
+const $ = (id) => document.getElementById(id);
+let pyodide = null;
+
+// ---- line-item rows -------------------------------------------------------
+function el(tag, props = {}, children = []) {
+  const n = document.createElement(tag);
+  Object.assign(n, props);
+  for (const c of children) n.append(c);
+  return n;
+}
+
+function field(label, control) {
+  const wrap = el("div");
+  wrap.append(el("div", { className: "hd", textContent: label }), control);
+  return wrap;
+}
+
+function addRow(name = "", category = "internal_failure", mode = "direct", a = "", b = "", reduction = 0) {
+  const nameIn = el("input", { type: "text", value: name, placeholder: "e.g. Scrap" });
+  nameIn.dataset.f = "name";
+  const catSel = el("select");
+  for (const [k, v] of Object.entries(CATEGORY_LABELS)) catSel.append(el("option", { value: k, textContent: v }));
+  catSel.value = category;
+  catSel.dataset.f = "category";
+  const modeSel = el("select");
+  modeSel.append(el("option", { value: "direct", textContent: "Annual $" }), el("option", { value: "driver", textContent: "Units × $/unit" }));
+  modeSel.value = mode;
+  modeSel.dataset.f = "mode";
+  const aIn = el("input", { type: "number", min: "0", step: "any", value: a ?? "" });
+  aIn.dataset.f = "a";
+  const bIn = el("input", { type: "number", min: "0", step: "any", value: b ?? "" });
+  bIn.dataset.f = "b";
+  const redIn = el("input", { type: "number", min: "0", max: "100", step: "any", value: reduction });
+  redIn.dataset.f = "reduction";
+  const del = el("button", { type: "button", className: "secondary", textContent: "✕", title: "Remove line" });
+
+  const aLabel = field("", aIn);
+  const bLabel = field("", bIn);
+  const sync = () => {
+    const driver = modeSel.value === "driver";
+    aLabel.firstChild.textContent = driver ? "Units / yr" : "Annual $";
+    bLabel.firstChild.textContent = driver ? "$ per unit" : "";
+    bIn.style.visibility = driver ? "visible" : "hidden";
+  };
+  modeSel.addEventListener("change", sync);
+  sync();
+
+  const row = el("div", { className: "row" }, [
+    field("Name", nameIn), field("Category", catSel), field("Basis", modeSel),
+    aLabel, bLabel, field("Reduction %", redIn), del,
+  ]);
+  del.addEventListener("click", () => row.remove());
+  $("rows").append(row);
+}
+
+function loadExample() {
+  $("rows").replaceChildren();
+  for (const r of EXAMPLE.items) addRow(...r);
+  $("revenue").value = EXAMPLE.revenue;
+  $("useProject").checked = true;
+  $("oneTime").value = EXAMPLE.project.oneTime;
+  $("addedSpend").value = EXAMPLE.project.addedSpend;
+  $("horizon").value = EXAMPLE.project.horizon;
+  $("discount").value = EXAMPLE.project.discount;
+  syncProjectFields();
+  calculate();
+}
+
+function syncProjectFields() {
+  for (const inp of $("projectFields").querySelectorAll("input")) inp.disabled = !$("useProject").checked;
+}
+
+// ---- collect + validate ---------------------------------------------------
+function num(v) {
+  return v === "" || v === null || v === undefined ? null : Number(v);
+}
+
+function collect() {
+  const items = [];
+  for (const row of $("rows").querySelectorAll(".row")) {
+    const g = (f) => row.querySelector(`[data-f="${f}"]`).value;
+    const name = g("name").trim();
+    if (!name) throw new Error("Every line needs a name.");
+    const item = { name, category: g("category"), reduction: (num(g("reduction")) ?? 0) / 100 };
+    if (g("mode") === "driver") {
+      item.units = num(g("a"));
+      item.unit_cost = num(g("b"));
+      if (item.units === null || item.unit_cost === null) throw new Error(`"${name}": enter both units and $ per unit.`);
+    } else {
+      item.annual_cost = num(g("a"));
+      if (item.annual_cost === null) throw new Error(`"${name}": enter an annual dollar amount.`);
+    }
+    items.push(item);
+  }
+  if (!items.length) throw new Error("Add at least one cost line.");
+  const payload = { revenue: num($("revenue").value), items, project: null };
+  if ($("useProject").checked) {
+    payload.project = {
+      one_time_cost: num($("oneTime").value) ?? 0,
+      added_annual_spend: num($("addedSpend").value) ?? 0,
+      horizon_years: num($("horizon").value) ?? 3,
+      discount_rate: (num($("discount").value) ?? 0) / 100,
+    };
+  }
+  return payload;
+}
+
+// ---- run + render ---------------------------------------------------------
+function calculate() {
+  $("error").textContent = "";
+  $("results").replaceChildren();
+  let out;
+  try {
+    const payload = collect();
+    pyodide.globals.set("payload_json", JSON.stringify(payload));
+    out = JSON.parse(pyodide.runPython(
+      "import json\nfrom opstoolkit.copq import compute_from_dict\njson.dumps(compute_from_dict(json.loads(payload_json)))"
+    ));
+  } catch (e) {
+    const msg = String(e.message || e).split("\n").filter(Boolean).pop();
+    $("error").textContent = msg.replace(/^ValueError:\s*/, "");
+    return;
+  }
+  render(out);
+}
+
+const pctOrNA = (x) => (x === null ? "n/a" : pct(x));
+
+function table(headers, rows) {
+  const t = el("table");
+  t.append(el("thead", {}, [el("tr", {}, headers.map((h) => el("th", { textContent: h })))]));
+  t.append(el("tbody", {}, rows.map((r) => el("tr", {}, r.map((c) => el("td", { textContent: c }))))));
+  return t;
+}
+
+function kpi(value, label) {
+  return el("div", {}, [el("b", { textContent: value }), el("span", { textContent: label })]);
+}
+
+function render(o) {
+  const card = (title, ...kids) => el("div", { className: "card" }, [el("h2", { textContent: title }), ...kids]);
+  const out = $("results");
+
+  out.append(card("Baseline cost of quality",
+    el("div", { className: "kpi" }, [
+      kpi(money(o.coq), "Total cost of quality (CoQ)"),
+      kpi(pctOrNA(o.coq_pct_revenue), "CoQ as % of revenue"),
+      kpi(money(o.copq), "Cost of poor quality (failures)"),
+      kpi(money(o.cogq), "Cost of good quality (prevention + appraisal)"),
+    ]),
+    table(["Category", "Annual cost", "Share of CoQ"],
+      Object.keys(CATEGORY_LABELS).map((k) => [CATEGORY_LABELS[k], money(o.category_totals[k]), pct(o.category_shares[k])])),
+    table(["Line item", "Annual cost"], Object.entries(o.line_costs).map(([n, c]) => [n, money(c)]))));
+
+  const p = o.project;
+  if (!p) return;
+  out.append(card("Improvement project",
+    el("div", { className: "kpi" }, [
+      kpi(money(p.net_annual_savings), "Net annual savings"),
+      kpi(p.payback_months === null ? "never" : p.payback_months.toFixed(1) + " mo", "Simple payback"),
+      kpi(money(p.npv), "NPV over horizon"),
+      kpi(money(p.post_project_coq) + (p.post_project_coq_pct_revenue === null ? "" : " (" + pct(p.post_project_coq_pct_revenue) + ")"), "Post-project CoQ"),
+    ]),
+    el("div", { className: "decision", textContent: p.decision }),
+    table(["Line item", "Annual savings"], Object.entries(p.savings_by_line).filter(([, s]) => s > 0).map(([n, s]) => [n, money(s)]))));
+
+  const s = p.sensitivity;
+  out.append(card("Sensitivity: NPV",
+    el("p", { className: "sub", textContent: "Rows: share of the assumed reduction actually achieved. Columns: one-time project cost vs. your estimate." }),
+    table(["Reduction achieved", ...s.cost.map((c) => "Cost " + (c * 100).toFixed(0) + "%")],
+      s.achievement.map((a, i) => [(a * 100).toFixed(0) + "%", ...s.npv[i].map(money)]))));
+}
+
+// ---- boot -----------------------------------------------------------------
+$("addRow").addEventListener("click", () => addRow());
+$("loadExample").addEventListener("click", () => { if (pyodide) loadExample(); });
+$("calc").addEventListener("click", calculate);
+$("useProject").addEventListener("change", () => { syncProjectFields(); });
+addRow();
+syncProjectFields();
+
+try {
+  pyodide = await loadPyodide();
+  await loadPackage(pyodide);
+  $("status").textContent = "Ready.";
+  $("calc").disabled = false;
+  window.__ready = true;
+} catch (e) {
+  $("status").textContent = "Failed to load the calculator engine: " + e.message;
+}
+</script>
+</body>
+</html>
