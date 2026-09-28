@@ -66,7 +66,7 @@ d = 200 units/week, σ_d = 40, L = 2 weeks, P = 52 (D = 10,400/yr), S = $75/orde
 | At 95%: safety-stock carrying, stockout cost, fill rate | $558.28, $602.65, 99.77% |
 | **Optimal CSL** (critical ratio 0.98823) | **98.82%**: z\* = 2.2647, SS = 128.1 units |
 | At the optimum: carrying + stockout cost | $768.65 + $117.07 = **$885.72** (vs. $1,160.93 at 95%) |
-| Annual saving from the optimum vs. the 95% target | **$275.21** |
+| Annual saving from the optimum vs. the 95% target | **$275.20** |
 
 Service-level table (safety-stock carrying / expected stockout cost / total):
 

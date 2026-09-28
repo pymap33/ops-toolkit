@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Safety-Stock &amp; Service-Level Cost Optimizer</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f7f7f5; --fg:#1a1a1a; --card:#fff; --border:#d9d9d4; --accent:#2f6f4f; --muted:#666; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15161a; --fg:#e8e8e6; --card:#1e2024; --border:#33353a; --accent:#6fbf94; --muted:#9a9a98; --bad:#f2b8b5; }
+  }
+  body { background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif; margin:0; padding:2rem 1rem; }
+  main { max-width:900px; margin:0 auto; }
+  a { color:var(--accent); }
+  h1 { font-size:1.4rem; margin:.4rem 0 .25rem; }
+  h2 { font-size:1.05rem; margin:0 0 .6rem; }
+  p.sub { color:var(--muted); margin-top:0; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:1.1rem; margin-bottom:1rem; }
+  label { display:block; font-size:.85rem; margin-bottom:.2rem; }
+  label small { color:var(--muted); }
+  input { box-sizing:border-box; width:100%; padding:.4rem .5rem; border:1px solid var(--border); border-radius:6px; background:transparent; color:inherit; font:inherit; }
+  .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:.6rem 1rem; }
+  button { background:var(--accent); color:#fff; border:none; padding:.5rem 1rem; border-radius:6px; font:inherit; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.5; cursor:wait; }
+  .actions { display:flex; gap:.6rem; flex-wrap:wrap; margin:.4rem 0 1rem; }
+  table { border-collapse:collapse; width:100%; font-size:.85rem; margin:.5rem 0; }
+  td, th { border:1px solid var(--border); padding:.3rem .5rem; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  tr.hl td { background:color-mix(in srgb, var(--accent) 14%, transparent); font-weight:600; }
+  .kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.6rem; margin-bottom:.6rem; }
+  .kpi div { border:1px solid var(--border); border-radius:8px; padding:.5rem .7rem; }
+  .kpi b { display:block; font-size:1.15rem; }
+  .kpi span { font-size:.78rem; color:var(--muted); }
+  #error { color:var(--bad); font-weight:600; }
+  #status { font-size:.8rem; color:var(--muted); }
+  .decision { border-left:4px solid var(--accent); padding:.4rem .8rem; margin:.6rem 0; }
+  ul.limits { margin:.3rem 0 0 1.1rem; padding:0; }
+  footer { color:var(--muted); font-size:.82rem; margin-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+<a href="index.html">&larr; All tools</a>
+<h1>Safety-Stock &amp; Service-Level Cost Optimizer</h1>
+<p class="sub">Size the order quantity, safety stock and reorder point for an item with uncertain demand, see what each service level costs, and find the service level that minimizes total cost. Runs entirely in your browser.</p>
+<p id="status">Loading calculator engine&hellip;</p>
+
+<div class="card">
+  <h2>1. Demand and lead time</h2>
+  <div class="fields">
+    <div><label for="meanDemand">Mean demand per period (units)</label><input id="meanDemand" type="number" min="0" step="any"></div>
+    <div><label for="demandStd">Std deviation of demand per period (units)</label><input id="demandStd" type="number" min="0" step="any"></div>
+    <div><label for="leadTime">Lead time (periods, same unit as demand)</label><input id="leadTime" type="number" min="0" step="any"></div>
+    <div><label for="periods">Periods per year</label><input id="periods" type="number" min="0" step="any" value="52"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2. Costs and policy</h2>
+  <div class="fields">
+    <div><label for="orderCost">Order cost ($ per order)</label><input id="orderCost" type="number" min="0" step="any"></div>
+    <div><label for="holdingCost">Holding cost ($ per unit per year)</label><input id="holdingCost" type="number" min="0" step="any"></div>
+    <div><label for="orderQty">Order quantity <small>(optional; blank = EOQ)</small></label><input id="orderQty" type="number" min="0" step="any"></div>
+    <div><label for="csl">Target cycle service level (%)</label><input id="csl" type="number" min="50" max="99.99" step="any" value="95"></div>
+    <div><label for="shortage">Cost per unit short ($) <small>(optional; shortages backordered)</small></label><input id="shortage" type="number" min="0" step="any"></div>
+  </div>
+</div>
+
+<div class="actions">
+  <button type="button" id="calc" disabled>Calculate</button>
+  <button type="button" class="secondary" id="loadExample" disabled>Load worked example</button>
+  <button type="button" class="secondary" id="loadEoq" disabled>Load textbook EOQ example (Apple Canada)</button>
+  <button type="button" class="secondary" id="loadKiosk" disabled>Load textbook safety-stock example (kiosk)</button>
+</div>
+<p id="error"></p>
+<div id="results"></div>
+
+<div class="card">
+  <h2>When NOT to use this</h2>
+  <ul class="limits">
+    <li>Demand over the lead time should be roughly normal and the lead time constant. Lumpy, intermittent or heavily skewed demand, and variable lead times, are outside this version.</li>
+    <li>It models a continuous-review (Q, R) policy only, not periodic review or min/max systems. Shortages are assumed backordered, not lost.</li>
+    <li>No quantity discounts or seasonality. Holding cost is a single number you supply.</li>
+    <li>The cost per unit short is the weakest input. The full cost table shows the range where the answer barely changes.</li>
+    <li>It is not a forecast. A poor estimate of demand variability gives a poor safety stock.</li>
+    <li>Fill rate and cycle service level are different measures; the table shows both.</li>
+  </ul>
+</div>
+
+<footer>Methods: EOQ and safety stock per <a href="https://ecampusontario.pressbooks.pub/fundamentalsopsmgmt/chapter/8-7-inventory-models-for-uncertain-demand/">Fundamentals of Operations Management, &sect;8.5 and &sect;8.7</a>; the optimal service level is a standard critical-ratio result validated independently. Educational tool, not professional advice. Inputs are processed locally in your browser and are never transmitted.</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<script type="module">
+import { loadPackage, money } from "./shared/loader.js";
+
+const EXAMPLE = { meanDemand: 200, demandStd: 40, leadTime: 2, periods: 52, orderCost: 75, holdingCost: 6, orderQty: "", csl: 95, shortage: 25 };
+// One period = one year, so mean demand is annual demand; no variability.
+const EOQ_EXAMPLE = { meanDemand: 250000, demandStd: 0, leadTime: 1, periods: 1, orderCost: 150, holdingCost: 12, orderQty: "", csl: 95, shortage: "" };
+// Only the demand, std dev, lead time and 90% CSL come from the textbook; order and holding cost are placeholders.
+const KIOSK = { meanDemand: 20, demandStd: 4, leadTime: 1, periods: 52, orderCost: 10, holdingCost: 1, orderQty: "", csl: 90, shortage: "" };
+
+const IDS = { meanDemand: "meanDemand", demandStd: "demandStd", leadTime: "leadTime", periods: "periods", orderCost: "orderCost", holdingCost: "holdingCost", orderQty: "orderQty", csl: "csl", shortage: "shortage" };
+const $ = (id) => document.getElementById(id);
+let pyodide = null;
+
+function el(tag, props = {}, children = []) {
+  const n = document.createElement(tag);
+  Object.assign(n, props);
+  for (const c of children) n.append(c);
+  return n;
+}
+
+function loadCase(c) {
+  for (const [k, id] of Object.entries(IDS)) $(id).value = c[k];
+  calculate();
+}
+
+function num(v) {
+  return v === "" || v === null || v === undefined ? null : Number(v);
+}
+
+function collect() {
+  const req = (id, label) => {
+    const v = num($(id).value);
+    if (v === null) throw new Error(`Enter ${label}.`);
+    return v;
+  };
+  return {
+    mean_demand: req("meanDemand", "mean demand per period"),
+    demand_std: req("demandStd", "the standard deviation of demand"),
+    lead_time: req("leadTime", "the lead time"),
+    periods_per_year: req("periods", "periods per year"),
+    order_cost: req("orderCost", "the order cost"),
+    holding_cost: req("holdingCost", "the holding cost"),
+    order_quantity: num($("orderQty").value),
+    target_csl: req("csl", "a target service level") / 100,
+    shortage_cost: num($("shortage").value),
+  };
+}
+
+function calculate() {
+  $("error").textContent = "";
+  $("results").replaceChildren();
+  let out;
+  try {
+    pyodide.globals.set("payload_json", JSON.stringify(collect()));
+    out = JSON.parse(pyodide.runPython(
+      "import json\nfrom opstoolkit.safety_stock import compute_from_dict\njson.dumps(compute_from_dict(json.loads(payload_json)))"
+    ));
+  } catch (e) {
+    const msg = String(e.message || e).split("\n").filter(Boolean).pop();
+    $("error").textContent = msg.replace(/^ValueError:\s*/, "");
+    return;
+  }
+  render(out);
+}
+
+const one = (x) => x.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const two = (x) => x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money2 = (x) => x.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pct = (x, d = 1) => (x * 100).toFixed(d) + "%";
+
+function table(headers, rows, highlight = -1) {
+  const t = el("table");
+  t.append(el("thead", {}, [el("tr", {}, headers.map((h) => el("th", { textContent: h })))]));
+  t.append(el("tbody", {}, rows.map((r, i) => el("tr", i === highlight ? { className: "hl" } : {}, r.map((c) => el("td", { textContent: c }))))));
+  return t;
+}
+
+function kpi(value, label) {
+  return el("div", {}, [el("b", { textContent: value }), el("span", { textContent: label })]);
+}
+
+function render(o) {
+  const card = (title, ...kids) => el("div", { className: "card" }, [el("h2", { textContent: title }), ...kids]);
+  const out = $("results");
+  const t = o.target;
+  const hasP = t.stockout_cost !== null;
+
+  const kpis = [
+    kpi(one(t.safety_stock) + " units", `Safety stock at ${pct(t.csl)} service`),
+    kpi(one(o.reorder_point) + " units", "Reorder point"),
+    kpi(one(o.order_quantity) + " units" + (o.used_eoq ? " (EOQ)" : ""), "Order quantity"),
+    kpi(money(o.total_inventory_cost), "Total annual inventory cost"),
+  ];
+  if (o.optimum) kpis.push(kpi(pct(o.optimum.csl, 2), "Cost-minimizing service level"));
+  out.append(card("Result", el("div", { className: "kpi" }, kpis), el("div", { className: "decision", textContent: o.decision })));
+
+  out.append(card("Annual cost breakdown at the target service level",
+    table(["Component", "Annual cost"], [
+      [`Ordering (${two(o.orders_per_year)} orders/yr)`, money2(o.ordering_cost)],
+      ["Cycle-stock holding", money2(o.cycle_holding_cost)],
+      ["Safety-stock holding", money2(t.carrying_cost)],
+      ...(hasP ? [["Expected shortage cost", money2(t.stockout_cost)]] : []),
+      ["Total", money2(o.total_inventory_cost)],
+    ]),
+    el("p", { className: "sub", textContent: `Annual demand ${one(o.annual_demand)} units. Lead-time demand: mean ${one(o.lead_time_demand_mean)}, std dev ${two(o.lead_time_demand_std)}.` })));
+
+  const headers = ["Cycle service level", "z", "Safety stock", "Carrying $/yr", "Added vs. prior", "Units short/cycle", "Fill rate"];
+  if (hasP) headers.push("Shortage $/yr", "Total $/yr");
+  const rows = o.table.map((r) => [
+    pct(r.csl), two(r.z), one(r.safety_stock), money2(r.carrying_cost),
+    r.step_cost === null ? "-" : money2(r.step_cost), two(r.expected_short_per_cycle), pct(r.fill_rate, 2),
+    ...(hasP ? [money2(r.stockout_cost), money2(r.total_cost)] : []),
+  ]);
+  let bestRow = -1;
+  if (hasP) bestRow = o.table.reduce((b, r, i, a) => (r.total_cost < a[b].total_cost ? i : b), 0);
+  out.append(card("What each service level costs",
+    table(headers, rows, bestRow),
+    el("p", { className: "sub", textContent: "Cycle service level is the chance of no stockout in a cycle; fill rate is the share of units delivered from stock." + (hasP ? " The highlighted row has the lowest total among the levels shown." : "") })));
+
+  if (o.optimum) {
+    const p = o.optimum;
+    out.append(card("Cost-minimizing service level",
+      table(["", "Target", "Optimum"], [
+        ["Cycle service level", pct(t.csl, 2), pct(p.csl, 2)],
+        ["Safety stock (units)", one(t.safety_stock), one(p.safety_stock)],
+        ["Safety-stock carrying $/yr", money2(t.carrying_cost), money2(p.carrying_cost)],
+        ["Shortage cost $/yr", money2(t.stockout_cost), money2(p.stockout_cost)],
+        ["Carrying + shortage $/yr", money2(p.target_safety_plus_stockout), money2(p.safety_plus_stockout)],
+      ]),
+      el("p", { className: "sub", textContent: p.clamped_at_zero
+        ? "At this shortage cost the optimum is to hold no safety stock (critical ratio at or below 50%)."
+        : `Critical ratio 1 - Q*H/(p*D) = ${p.critical_ratio.toFixed(5)}. Annual saving vs. the target: ${money2(p.saving_vs_target)}.` })));
+  }
+}
+
+// ---- boot -----------------------------------------------------------------
+loadCaseInitial();
+function loadCaseInitial() { for (const [k, id] of Object.entries(IDS)) $(id).value = EXAMPLE[k]; }
+$("calc").addEventListener("click", calculate);
+$("loadExample").addEventListener("click", () => loadCase(EXAMPLE));
+$("loadEoq").addEventListener("click", () => loadCase(EOQ_EXAMPLE));
+$("loadKiosk").addEventListener("click", () => loadCase(KIOSK));
+
+try {
+  pyodide = await loadPyodide();
+  await loadPackage(pyodide);
+  $("status").textContent = "Ready.";
+  for (const id of ["calc", "loadExample", "loadEoq", "loadKiosk"]) $(id).disabled = false;
+  window.__ready = true;
+} catch (e) {
+  $("status").textContent = "Failed to load the calculator engine: " + e.message;
+}
+</script>
+</body>
+</html>

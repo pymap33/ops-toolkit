@@ -186,7 +186,7 @@ def test_reference_case_optimum():
     assert o.carrying_cost == pytest.approx(768.6489686755065)
     assert o.stockout_cost == pytest.approx(117.07440311507422)
     assert o.safety_plus_stockout == pytest.approx(885.7233717905807)
-    assert o.saving_vs_target == pytest.approx(275.21, abs=0.01)
+    assert o.saving_vs_target == pytest.approx(275.2035, abs=0.001)
     assert not o.clamped_at_zero
 
 
