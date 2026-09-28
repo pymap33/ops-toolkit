@@ -9,6 +9,7 @@ Cost-modeling and operations-finance calculators for the space where Lean/Six Si
 | Tool | Status |
 |---|---|
 | [Cost of Poor Quality (COPQ) calculator](web/calculator-copq.html) | Built; `opstoolkit/copq.py`, spec in `docs/specs/01-copq.md` |
+| [Make-vs-Buy / TCO calculator](web/calculator-make-vs-buy.html) | Built; `opstoolkit/make_vs_buy.py`, spec in `docs/specs/02-make-vs-buy.md` |
 
 A "Which tool do I need?" table will go here as tools ship.
 

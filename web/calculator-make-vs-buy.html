@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Make-vs-Buy / TCO Calculator</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f7f7f5; --fg:#1a1a1a; --card:#fff; --border:#d9d9d4; --accent:#2f6f4f; --muted:#666; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15161a; --fg:#e8e8e6; --card:#1e2024; --border:#33353a; --accent:#6fbf94; --muted:#9a9a98; --bad:#f2b8b5; }
+  }
+  body { background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif; margin:0; padding:2rem 1rem; }
+  main { max-width:900px; margin:0 auto; }
+  a { color:var(--accent); }
+  h1 { font-size:1.4rem; margin:.4rem 0 .25rem; }
+  h2 { font-size:1.05rem; margin:0 0 .6rem; }
+  p.sub { color:var(--muted); margin-top:0; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:1.1rem; margin-bottom:1rem; }
+  label { display:block; font-size:.85rem; margin-bottom:.2rem; }
+  label small { color:var(--muted); }
+  input { box-sizing:border-box; width:100%; padding:.4rem .5rem; border:1px solid var(--border); border-radius:6px; background:transparent; color:inherit; font:inherit; }
+  .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:.6rem 1rem; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media (max-width:720px) { .two { grid-template-columns:1fr; } }
+  .opt .fields { grid-template-columns:1fr 1fr; }
+  button { background:var(--accent); color:#fff; border:none; padding:.5rem 1rem; border-radius:6px; font:inherit; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.5; cursor:wait; }
+  .actions { display:flex; gap:.6rem; flex-wrap:wrap; margin:.4rem 0 1rem; }
+  table { border-collapse:collapse; width:100%; font-size:.85rem; margin:.5rem 0; }
+  td, th { border:1px solid var(--border); padding:.3rem .5rem; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  .kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.6rem; margin-bottom:.6rem; }
+  .kpi div { border:1px solid var(--border); border-radius:8px; padding:.5rem .7rem; }
+  .kpi b { display:block; font-size:1.15rem; }
+  .kpi span { font-size:.78rem; color:var(--muted); }
+  #error { color:var(--bad); font-weight:600; }
+  #status { font-size:.8rem; color:var(--muted); }
+  .decision { border-left:4px solid var(--accent); padding:.4rem .8rem; margin:.6rem 0; }
+  ul.limits { margin:.3rem 0 0 1.1rem; padding:0; }
+  footer { color:var(--muted); font-size:.82rem; margin-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+<a href="index.html">&larr; All tools</a>
+<h1>Make-vs-Buy / TCO Calculator</h1>
+<p class="sub">Compare two sourcing options on total annual cost, including setup, quality, inventory and risk. Find the volume where the decision flips. Runs entirely in your browser.</p>
+<p id="status">Loading calculator engine&hellip;</p>
+
+<div class="card">
+  <h2>1. Volume and annualizing</h2>
+  <div class="fields">
+    <div><label for="volume">Annual volume (units/yr)</label><input id="volume" type="number" min="0" step="any"></div>
+    <div><label for="horizon">Horizon (years, 1&ndash;10)</label><input id="horizon" type="number" min="1" max="10" step="1" value="5"></div>
+    <div><label for="discount">Discount rate (%) <small>&mdash; your assumption</small></label><input id="discount" type="number" min="0" step="any" value="10"></div>
+  </div>
+  <p class="sub" style="margin-bottom:0">Horizon and discount rate only spread each option's one-time cost into an annual amount.</p>
+</div>
+
+<div class="two">
+  <div class="card opt" id="optA"><h2>Option A</h2></div>
+  <div class="card opt" id="optB"><h2>Option B</h2></div>
+</div>
+
+<div class="actions">
+  <button type="button" id="calc" disabled>Calculate</button>
+  <button type="button" class="secondary" id="loadExample" disabled>Load worked example</button>
+  <button type="button" class="secondary" id="loadAbx" disabled>Load textbook example (ABX)</button>
+</div>
+<p id="error"></p>
+<div id="results"></div>
+
+<div class="card">
+  <h2>When NOT to use this</h2>
+  <ul class="limits">
+    <li>Two options only. There is no multi-supplier comparison.</li>
+    <li>Costs are linear in volume: no volume discounts, price breaks or step-fixed costs (such as a second machine at higher volume). Above the capacity of a single machine, this model understates the cost of making it yourself.</li>
+    <li>Volume is flat: no growth or seasonality. Pre-tax, single currency.</li>
+    <li>Intellectual property, core competence and supplier dependence are not priced. The risk premium is a blunt stand-in.</li>
+    <li>Defect costs, carrying rate, risk premium and inventory days are assumptions. The sensitivity grid shows how much they matter.</li>
+  </ul>
+</div>
+
+<footer>Break-even method: total-cost comparison for make-or-buy per <a href="https://ecampusontario.pressbooks.pub/fundamentalsopsmgmt/chapter/4-10-break-even-analysis-a-fundamental-tool-for-capacity-evaluation/">Fundamentals of Operations Management, &sect;4.10</a>. Educational tool, not professional advice. Inputs are processed locally in your browser and are never transmitted.</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<script type="module">
+import { loadPackage, money } from "./shared/loader.js";
+
+// [key, label, step/min note, is-percent (entered as %, sent as fraction)]
+const FIELDS = [
+  ["name", "Name", null, false],
+  ["fixed_annual", "Fixed annual cost ($/yr)", "$", false],
+  ["one_time", "One-time cost ($)", "$", false],
+  ["variable_per_unit", "Variable cost per unit ($, landed)", "$", false],
+  ["defect_rate", "Defect rate (%)", "%", true],
+  ["cost_per_defect", "Cost per defect ($)", "$", false],
+  ["inventory_days", "Inventory days held", "d", false],
+  ["carrying_rate", "Carrying rate (%/yr) — assumption", "%", true],
+  ["risk_premium", "Risk premium (% of variable cost)", "%", true],
+];
+
+const EXAMPLE = {
+  volume: 3500, horizon: 5, discount: 10,
+  a: { name: "Make", fixed_annual: 160000, one_time: 90000, variable_per_unit: 100, defect_rate: 2, cost_per_defect: 40, inventory_days: 20, carrying_rate: 20, risk_premium: 0 },
+  b: { name: "Buy", fixed_annual: 0, one_time: 30000, variable_per_unit: 150, defect_rate: 1, cost_per_defect: 40, inventory_days: 45, carrying_rate: 20, risk_premium: 5 },
+};
+const ABX = {
+  volume: 1000, horizon: 5, discount: 10,
+  a: { name: "Make", fixed_annual: 160000, one_time: 0, variable_per_unit: 100, defect_rate: 0, cost_per_defect: 0, inventory_days: 0, carrying_rate: 20, risk_premium: 0 },
+  b: { name: "Buy", fixed_annual: 0, one_time: 0, variable_per_unit: 150, defect_rate: 0, cost_per_defect: 0, inventory_days: 0, carrying_rate: 20, risk_premium: 0 },
+};
+
+const $ = (id) => document.getElementById(id);
+let pyodide = null;
+
+function el(tag, props = {}, children = []) {
+  const n = document.createElement(tag);
+  Object.assign(n, props);
+  for (const c of children) n.append(c);
+  return n;
+}
+
+function buildOption(containerId, prefix, defaults) {
+  const grid = el("div", { className: "fields" });
+  for (const [key, label] of FIELDS) {
+    const input = el("input", {
+      id: `${prefix}_${key}`,
+      type: key === "name" ? "text" : "number",
+      value: defaults[key] ?? "",
+    });
+    if (key !== "name") { input.min = "0"; input.step = "any"; }
+    grid.append(el("div", {}, [el("label", { htmlFor: input.id, textContent: label }), input]));
+  }
+  $(containerId).append(grid);
+}
+
+function setOption(prefix, values) {
+  for (const [key] of FIELDS) $(`${prefix}_${key}`).value = values[key];
+}
+
+function loadCase(c) {
+  $("volume").value = c.volume;
+  $("horizon").value = c.horizon;
+  $("discount").value = c.discount;
+  setOption("a", c.a);
+  setOption("b", c.b);
+  calculate();
+}
+
+function num(v) {
+  return v === "" || v === null || v === undefined ? null : Number(v);
+}
+
+function collectOption(prefix) {
+  const o = {};
+  for (const [key, , , isPct] of FIELDS) {
+    const raw = $(`${prefix}_${key}`).value;
+    if (key === "name") { o.name = raw.trim(); continue; }
+    const v = num(raw);
+    o[key] = v === null ? 0 : (isPct ? v / 100 : v);
+  }
+  return o;
+}
+
+function calculate() {
+  $("error").textContent = "";
+  $("results").replaceChildren();
+  let out;
+  try {
+    const volume = num($("volume").value);
+    if (volume === null) throw new Error("Enter an annual volume.");
+    const payload = {
+      volume,
+      horizon_years: num($("horizon").value) ?? 5,
+      discount_rate: (num($("discount").value) ?? 0) / 100,
+      a: collectOption("a"),
+      b: collectOption("b"),
+    };
+    pyodide.globals.set("payload_json", JSON.stringify(payload));
+    out = JSON.parse(pyodide.runPython(
+      "import json\nfrom opstoolkit.make_vs_buy import compare_from_dict\njson.dumps(compare_from_dict(json.loads(payload_json)))"
+    ));
+  } catch (e) {
+    const msg = String(e.message || e).split("\n").filter(Boolean).pop();
+    $("error").textContent = msg.replace(/^ValueError:\s*/, "");
+    return;
+  }
+  render(out);
+}
+
+const units = (x) => Math.round(x).toLocaleString("en-US");
+const money2 = (x) => x.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pctText = (x) => (x * 100).toFixed(1) + "%";
+
+function table(headers, rows) {
+  const t = el("table");
+  t.append(el("thead", {}, [el("tr", {}, headers.map((h) => el("th", { textContent: h })))]));
+  t.append(el("tbody", {}, rows.map((r) => el("tr", {}, r.map((c) => el("td", { textContent: c }))))));
+  return t;
+}
+
+function kpi(value, label) {
+  return el("div", {}, [el("b", { textContent: value }), el("span", { textContent: label })]);
+}
+
+function beText(be) {
+  if (be.kind === "crossover") return `${units(be.volume)} units`;
+  if (be.kind === "identical") return "none (identical cost)";
+  return `none (${be.cheaper_everywhere} cheaper at every volume)`;
+}
+
+function render(o) {
+  const card = (title, ...kids) => el("div", { className: "card" }, [el("h2", { textContent: title }), ...kids]);
+  const out = $("results");
+  const [a, b] = o.options;
+  const [na, nb] = o.naive_options;
+
+  out.append(card("Result",
+    el("div", { className: "kpi" }, [
+      kpi(o.preferred ?? "Tie", "Preferred at this volume"),
+      kpi(money(o.advantage) + (o.advantage_pct === null ? "" : " (" + pctText(o.advantage_pct) + ")"), "Annual advantage"),
+      kpi(beText(o.break_even), "Break-even volume (full TCO)"),
+      kpi(beText(o.naive_break_even), "Break-even, price and fixed cost only"),
+    ]),
+    el("div", { className: "decision", textContent: o.decision })));
+
+  out.append(card("Total annual cost at " + units(o.volume) + " units",
+    table(["", a.name, b.name],
+      [
+        ["Effective fixed ($/yr)", money(a.effective_fixed), money(b.effective_fixed)],
+        ["Effective variable ($/unit)", money2(a.effective_variable), money2(b.effective_variable)],
+        ["Total annual cost", money(a.total_cost), money(b.total_cost)],
+        ["Cost per unit", a.cost_per_unit === null ? "n/a" : money2(a.cost_per_unit), b.cost_per_unit === null ? "n/a" : money2(b.cost_per_unit)],
+        ["Naive total (price + fixed only)", money(na.total_cost), money(nb.total_cost)],
+      ])));
+
+  out.append(card("Cost by volume",
+    table(["Share of volume", "Units", a.name, b.name, "Cheaper"],
+      o.volume_table.map((r) => [
+        (r.factor * 100).toFixed(0) + "%", units(r.volume), money(r.cost_a), money(r.cost_b),
+        Math.abs(r.cost_a - r.cost_b) < 1e-6 ? "tie" : (r.cost_a < r.cost_b ? a.name : b.name),
+      ]))));
+
+  const s = o.sensitivity;
+  const delta = (d) => (d > 0 ? "+" : "") + (d * 100).toFixed(0) + "%";
+  out.append(card("Sensitivity: break-even volume (units)",
+    el("p", { className: "sub", textContent: `Rows: change in ${b.name}'s variable cost. Columns: change in ${a.name}'s variable cost. "none" means no crossover at that combination.` }),
+    table([`${b.name} \\ ${a.name}`, ...s.make_delta.map(delta)],
+      s.buy_delta.map((bd, i) => [delta(bd), ...s.break_even[i].map((v) => (v === null ? "none" : units(v)))]))));
+}
+
+// ---- boot -----------------------------------------------------------------
+buildOption("optA", "a", EXAMPLE.a);
+buildOption("optB", "b", EXAMPLE.b);
+$("volume").value = EXAMPLE.volume;
+$("calc").addEventListener("click", calculate);
+$("loadExample").addEventListener("click", () => loadCase(EXAMPLE));
+$("loadAbx").addEventListener("click", () => loadCase(ABX));
+
+try {
+  pyodide = await loadPyodide();
+  await loadPackage(pyodide);
+  $("status").textContent = "Ready.";
+  for (const id of ["calc", "loadExample", "loadAbx"]) $(id).disabled = false;
+  window.__ready = true;
+} catch (e) {
+  $("status").textContent = "Failed to load the calculator engine: " + e.message;
+}
+</script>
+</body>
+</html>
