@@ -1,6 +1,6 @@
 # Tool Spec — Safety-Stock & Service-Level Cost Optimizer
 
-**Plan ref:** 2.3 · **Date:** 2026-09-28 · **Status:** draft — awaiting review
+**Plan ref:** 2.3 · **Date:** 2026-09-28 · **Status:** approved 2026-09-28
 
 ## 1. Problem
 
@@ -14,12 +14,12 @@ A planner, buyer, operations or finance analyst setting inventory policy for a p
 
 | Input | Unit | Rule |
 |---|---|---|
-| Mean demand per period, d | units/period | ≥ 0 |
+| Mean demand per period, d | units/period | > 0 |
 | Std deviation of demand per period, σ_d | units/period | ≥ 0 |
 | Lead time, L | periods (same unit as demand) | > 0. Constant, not variable in v1 |
 | Periods per year, P | periods/yr | > 0, default 52. Annual demand D = d × P |
-| Order cost, S | $/order | ≥ 0 |
-| Holding cost, H | $/unit/yr | ≥ 0. Usually unit cost × carrying rate |
+| Order cost, S | $/order | ≥ 0 (> 0 when Q is left blank, since EOQ needs it) |
+| Holding cost, H | $/unit/yr | > 0. Usually unit cost × carrying rate. Zero would make EOQ and the optimum undefined |
 | Order quantity, Q | units | Optional. Blank = use EOQ |
 | Target cycle service level, CSL | % | 50–99.99, default 95 |
 | Cost per unit short, p | $/unit | Optional, ≥ 0. Enables the optimal-service-level result. Shortages are assumed backordered |

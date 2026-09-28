@@ -3,7 +3,8 @@
   "modules": [
     "__init__.py",
     "copq.py",
-    "make_vs_buy.py"
+    "make_vs_buy.py",
+    "safety_stock.py"
   ],
   "data": []
 }
