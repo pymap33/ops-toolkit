@@ -5,7 +5,8 @@
     "copq.py",
     "make_vs_buy.py",
     "safety_stock.py",
-    "sample_size.py"
+    "sample_size.py",
+    "should_cost.py"
   ],
   "data": []
 }

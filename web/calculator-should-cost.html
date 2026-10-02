@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Process-Chain Should-Cost Builder</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f7f7f5; --fg:#1a1a1a; --card:#fff; --border:#d9d9d4; --accent:#2f6f4f; --muted:#666; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15161a; --fg:#e8e8e6; --card:#1e2024; --border:#33353a; --accent:#6fbf94; --muted:#9a9a98; --bad:#f2b8b5; }
+  }
+  body { background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif; margin:0; padding:2rem 1rem; }
+  main { max-width:1000px; margin:0 auto; }
+  a { color:var(--accent); }
+  h1 { font-size:1.4rem; margin:.4rem 0 .25rem; }
+  h2 { font-size:1.05rem; margin:0 0 .6rem; }
+  p.sub { color:var(--muted); margin-top:0; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:1.1rem; margin-bottom:1rem; overflow-x:auto; }
+  label { display:block; font-size:.85rem; margin-bottom:.2rem; }
+  label small, h2 small { color:var(--muted); font-weight:normal; }
+  input, select { box-sizing:border-box; width:100%; padding:.35rem .45rem; border:1px solid var(--border); border-radius:6px; background:transparent; color:inherit; font:inherit; }
+  select option { background:var(--card); color:var(--fg); }
+  .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.6rem 1rem; }
+  button { background:var(--accent); color:#fff; border:none; padding:.5rem 1rem; border-radius:6px; font:inherit; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button.small { padding:.2rem .6rem; font-size:.8rem; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .actions { display:flex; gap:.6rem; flex-wrap:wrap; margin:.4rem 0 1rem; }
+  table { border-collapse:collapse; width:100%; font-size:.85rem; margin:.5rem 0; }
+  td, th { border:1px solid var(--border); padding:.3rem .5rem; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  table.edit td, table.edit th { text-align:left; padding:.2rem; white-space:nowrap; }
+  table.edit input { min-width:4.5rem; } table.edit select { min-width:6rem; }
+  tr.hl td { background:color-mix(in srgb, var(--accent) 14%, transparent); font-weight:600; }
+  .kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:.6rem; margin-bottom:.6rem; }
+  .kpi div { border:1px solid var(--border); border-radius:8px; padding:.5rem .7rem; }
+  .kpi b { display:block; font-size:1.15rem; }
+  .kpi span { font-size:.78rem; color:var(--muted); }
+  #error { color:var(--bad); font-weight:600; }
+  #status { font-size:.8rem; color:var(--muted); }
+  .decision { border-left:4px solid var(--accent); padding:.4rem .8rem; margin:.6rem 0; }
+  .note { border-left:4px solid var(--muted); padding:.3rem .8rem; color:var(--muted); font-size:.85rem; }
+  ul.limits { margin:.3rem 0 0 1.1rem; padding:0; }
+  footer { color:var(--muted); font-size:.82rem; margin-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+<a href="index.html">&larr; All tools</a>
+<h1>Process-Chain Should-Cost Builder</h1>
+<p class="sub">Build a rough, bottom-up price for a product made through a chain of process steps (extrusion, print, laminate, pouch-making, &hellip;), see how much of the price is material, conversion, waste, overhead and margin, and how margin stacks when steps sit in separate companies. All prices and rates are yours; nothing is shipped or transmitted. A rough estimate, not a quote.</p>
+<p id="status">Loading calculator engine&hellip;</p>
+
+<div class="card">
+  <h2>1. Format and order</h2>
+  <div class="fields">
+    <div><label for="webWidth">Web width (m)</label><input id="webWidth" type="number" min="0" step="any"></div>
+    <div><label for="unitsPerM">Good units per web metre <small>(lanes &divide; repeat length in m)</small></label><input id="unitsPerM" type="number" min="0" step="any"></div>
+    <div><label for="units">Good units required</label><input id="units" type="number" min="0" step="any"></div>
+    <div><label for="priceUnit">Material price unit</label><select id="priceUnit"><option value="kg">$ per kg</option><option value="lb">$ per lb</option></select></div>
+    <div><label for="toolCost">Tooling cost ($)</label><input id="toolCost" type="number" min="0" step="any"></div>
+    <div><label for="toolQty">Tooling amortization quantity (units)</label><input id="toolQty" type="number" min="0" step="any"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2. Materials <small>(give gsm, or thickness and density)</small></h2>
+  <table class="edit" id="matTable"><thead><tr><th>Name</th><th>gsm (g/m&sup2;)</th><th>or thickness (&micro;m)</th><th>density (g/cm&sup3;)</th><th>Price</th><th>Enters at step</th><th></th></tr></thead><tbody></tbody></table>
+  <button type="button" class="secondary small" id="addMat">+ Add material</button>
+</div>
+
+<div class="card">
+  <h2>3. Process steps in order <small>(one row per step; tick &ldquo;separate company&rdquo; if a different company takes over after this step)</small></h2>
+  <table class="edit" id="stepTable"><thead><tr><th>Name</th><th>Rate ($/hr)</th><th>Speed</th><th>Speed unit</th><th>Setup (hr)</th><th>Setup waste (m)</th><th>Run yield (%)</th><th>Separate company after?</th><th></th></tr></thead><tbody></tbody></table>
+  <button type="button" class="secondary small" id="addStep">+ Add step</button>
+  <p class="sub" style="margin-top:.6rem">The last step always sells to the buyer. One web width is used for the whole chain.</p>
+</div>
+
+<div class="card">
+  <h2>4. Overhead, margin and uncertainty</h2>
+  <div class="fields">
+    <div><label for="overhead">Overhead (% on a stage&rsquo;s material, conversion and bought-in input)</label><input id="overhead" type="number" min="0" step="any"></div>
+    <div><label for="margin">Margin (% of a stage&rsquo;s selling price)</label><input id="margin" type="number" min="0" max="99" step="any"></div>
+    <div><label for="bandPrice">Uncertainty: prices and rates &plusmn; (%)</label><input id="bandPrice" type="number" min="0" max="99" step="any" value="15"></div>
+    <div><label for="bandSpeed">Uncertainty: speeds &plusmn; (%)</label><input id="bandSpeed" type="number" min="0" max="99" step="any" value="15"></div>
+    <div><label for="bandYield">Uncertainty: run yield &plusmn; (points)</label><input id="bandYield" type="number" min="0" step="any" value="2"></div>
+    <div><label for="quote">Quoted price per 1,000 <small>(optional)</small></label><input id="quote" type="number" min="0" step="any"></div>
+  </div>
+</div>
+
+<div class="actions">
+  <button type="button" id="calc" disabled>Calculate</button>
+  <button type="button" class="secondary" id="loadA" disabled>Load worked example (one company)</button>
+  <button type="button" class="secondary" id="loadB" disabled>&hellip; pouch-making separate</button>
+  <button type="button" class="secondary" id="loadC" disabled>&hellip; all three separate</button>
+</div>
+<p id="error"></p>
+<div id="results"></div>
+
+<div class="card">
+  <h2>When NOT to use this</h2>
+  <ul class="limits">
+    <li><strong>It is a rough estimate.</strong> Use it as a reference range for a negotiation, not as proof that a quote is wrong. The range is an outer bound with every input at one extreme, not a confidence interval.</li>
+    <li>All prices and rates are yours; the tool has no market data. Garbage in, garbage out.</li>
+    <li>One web width for the whole chain, so a slit-down or an extrusion step at a different width is approximated. Web-based products only; not rigid packaging, thermoforming, molding or corrugate.</li>
+    <li>Waste is step run yield plus fixed setup waste, valued at the cost carried into that step. No scrap resale or regrind credit.</li>
+    <li>Overhead and margin are percentages. Plant allocation, freight, minimum-order charges, payment terms and tariffs are not modeled. Overhead at a downstream stage applies to what it receives as well as what it adds, so it compounds.</li>
+    <li>Validation is structural and arithmetic only: the published examples are vendor web pages, one with an error (see the validation notes in the repository).</li>
+  </ul>
+</div>
+
+<footer>Structure per <a href="https://pouchespack.com/how-to-calculate-film-yield-and-packaging-cost-per-unit/">BN Pack, film yield and packaging cost per unit</a> (lanes, repeat, waste waterfall) and <a href="https://www.dfma.com/resources/plastic-extrusion-cost.asp">DFMA / Boothroyd Dewhurst, plastic extrusion cost estimating</a> (rate &divide; speed, die amortization). Educational tool, not professional advice. Inputs are processed locally in your browser and are never transmitted.</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<script type="module">
+import { loadPackage } from "./shared/loader.js";
+
+const BASE = {
+  webWidth: 1.0, unitsPerM: 20, units: 1000000, priceUnit: "kg", toolCost: 12000, toolQty: 3000000,
+  overhead: 12, margin: 15, bandPrice: 15, bandSpeed: 15, bandYield: 2, quote: "",
+  materials: [
+    { name: "PET", gsm: "", thick: 12, density: 1.39, price: 2.40, step: "print" },
+    { name: "ink", gsm: 2, thick: "", density: "", price: 6.00, step: "print" },
+    { name: "adhesive", gsm: 2, thick: "", density: "", price: 4.00, step: "laminate" },
+    { name: "PE sealant", gsm: "", thick: 60, density: 0.92, price: 2.10, step: "laminate" },
+  ],
+  steps: [
+    { name: "print", rate: 140, speed: 150, unit: "m_per_min", setup: 1.0, waste: 400, yield: 98, handoff: false },
+    { name: "laminate", rate: 110, speed: 200, unit: "m_per_min", setup: 0.75, waste: 300, yield: 99, handoff: false },
+    { name: "pouch-make", rate: 95, speed: 100, unit: "m_per_min", setup: 1.5, waste: 200, yield: 99, handoff: false },
+  ],
+};
+const withHandoffs = (names) => ({ ...BASE, steps: BASE.steps.map((s) => ({ ...s, handoff: names.includes(s.name) })) });
+const CASES = { A: BASE, B: withHandoffs(["laminate"]), C: withHandoffs(["print", "laminate"]) };
+
+const $ = (id) => document.getElementById(id);
+let pyodide = null;
+
+function el(tag, props = {}, children = []) {
+  const n = document.createElement(tag);
+  Object.assign(n, props);
+  for (const c of children) n.append(c);
+  return n;
+}
+const input = (cls, value, type = "number") => el("input", { className: cls, type, value: value ?? "", step: "any", min: type === "number" ? "0" : undefined });
+
+function stepNames() {
+  return [...document.querySelectorAll("#stepTable .s-name")].map((i) => i.value.trim()).filter(Boolean);
+}
+
+function refreshStepSelects() {
+  const names = stepNames();
+  for (const sel of document.querySelectorAll("#matTable .m-step")) {
+    const keep = sel.value;
+    sel.replaceChildren(...names.map((n) => el("option", { value: n, textContent: n })));
+    if (names.includes(keep)) sel.value = keep;
+  }
+}
+
+function addMaterial(m = { name: "", gsm: "", thick: "", density: "", price: "", step: "" }) {
+  const tr = el("tr", {}, [
+    el("td", {}, [input("m-name", m.name, "text")]), el("td", {}, [input("m-gsm", m.gsm)]),
+    el("td", {}, [input("m-thick", m.thick)]), el("td", {}, [input("m-density", m.density)]),
+    el("td", {}, [input("m-price", m.price)]), el("td", {}, [el("select", { className: "m-step" })]),
+    el("td", {}, [el("button", { type: "button", className: "secondary small", textContent: "Remove", onclick: () => tr.remove() })]),
+  ]);
+  $("matTable").tBodies[0].append(tr);
+  refreshStepSelects();
+  if (m.step) tr.querySelector(".m-step").value = m.step;
+}
+
+function addStep(s = { name: "", rate: "", speed: "", unit: "m_per_min", setup: 0, waste: 0, yield: 100, handoff: false }) {
+  const unit = el("select", { className: "s-unit" }, [el("option", { value: "m_per_min", textContent: "m/min" }), el("option", { value: "kg_per_hr", textContent: "kg/hr" })]);
+  unit.value = s.unit;
+  const nameIn = input("s-name", s.name, "text");
+  nameIn.addEventListener("change", refreshStepSelects);
+  const ho = el("input", { className: "s-handoff", type: "checkbox", checked: s.handoff });
+  const tr = el("tr", {}, [
+    el("td", {}, [nameIn]), el("td", {}, [input("s-rate", s.rate)]), el("td", {}, [input("s-speed", s.speed)]), el("td", {}, [unit]),
+    el("td", {}, [input("s-setup", s.setup)]), el("td", {}, [input("s-waste", s.waste)]), el("td", {}, [input("s-yield", s.yield)]),
+    el("td", { style: "text-align:center" }, [ho]),
+    el("td", {}, [el("button", { type: "button", className: "secondary small", textContent: "Remove", onclick: () => { tr.remove(); refreshStepSelects(); } })]),
+  ]);
+  $("stepTable").tBodies[0].append(tr);
+  refreshStepSelects();
+}
+
+function loadCase(c) {
+  for (const id of ["webWidth", "unitsPerM", "units", "priceUnit", "toolCost", "toolQty", "overhead", "margin", "bandPrice", "bandSpeed", "bandYield", "quote"]) $(id).value = c[id];
+  $("matTable").tBodies[0].replaceChildren();
+  $("stepTable").tBodies[0].replaceChildren();
+  c.steps.forEach(addStep);
+  c.materials.forEach(addMaterial);
+}
+
+const num = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
+
+function collect() {
+  const req = (id, label) => {
+    const v = num($(id).value);
+    if (v === null) throw new Error(`Enter ${label}.`);
+    return v;
+  };
+  const perKg = $("priceUnit").value === "lb" ? 2.2046226218 : 1;
+  const rows = (sel) => [...document.querySelectorAll(sel)];
+  const materials = rows("#matTable tbody tr").map((tr, i) => {
+    const q = (c) => tr.querySelector(c).value;
+    const price = num(q(".m-price"));
+    if (price === null) throw new Error(`Material ${i + 1}: enter a price.`);
+    const m = { name: q(".m-name").trim() || `material ${i + 1}`, price_per_kg: price * perKg, step: q(".m-step") };
+    const gsm = num(q(".m-gsm"));
+    if (gsm !== null) m.gsm = gsm;
+    else { m.thickness_um = num(q(".m-thick")); m.density = num(q(".m-density")); }
+    return m;
+  });
+  const steps = rows("#stepTable tbody tr").map((tr, i) => {
+    const q = (c) => tr.querySelector(c).value;
+    const need = (c, label) => { const v = num(q(c)); if (v === null) throw new Error(`Step ${i + 1}: enter ${label}.`); return v; };
+    return {
+      name: q(".s-name").trim(), rate_per_hr: need(".s-rate", "a rate"), speed: need(".s-speed", "a speed"), speed_unit: q(".s-unit"),
+      setup_hr: num(q(".s-setup")) ?? 0, setup_waste_m: num(q(".s-waste")) ?? 0, run_yield: need(".s-yield", "a run yield") / 100,
+      handoff: tr.querySelector(".s-handoff").checked,
+    };
+  });
+  if (steps.some((s) => !s.name)) throw new Error("Give every step a name.");
+  return {
+    materials, steps, units: req("units", "the good units required"), units_per_m: req("unitsPerM", "good units per web metre"),
+    web_width_m: req("webWidth", "the web width"), tooling_cost: num($("toolCost").value) ?? 0, tooling_amort_qty: num($("toolQty").value) ?? 1,
+    overhead: req("overhead", "overhead") / 100, margin: req("margin", "margin") / 100,
+    band_price: (num($("bandPrice").value) ?? 0) / 100, band_speed: (num($("bandSpeed").value) ?? 0) / 100, band_yield: (num($("bandYield").value) ?? 0) / 100,
+    quote_per_1000: num($("quote").value),
+  };
+}
+
+function calculate() {
+  $("error").textContent = "";
+  $("results").replaceChildren();
+  let out, units;
+  try {
+    const payload = collect();
+    units = payload.units;
+    pyodide.globals.set("payload_json", JSON.stringify(payload));
+    out = JSON.parse(pyodide.runPython(
+      "import json\nfrom opstoolkit.should_cost import compute_from_dict\njson.dumps(compute_from_dict(json.loads(payload_json)))"
+    ));
+  } catch (e) {
+    const msg = String(e.message || e).split("\n").filter(Boolean).pop();
+    $("error").textContent = msg.replace(/^ValueError:\s*/, "");
+    return;
+  }
+  render(out, units);
+}
+
+const m2 = (x) => x.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const m0 = (x) => x.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const one = (x) => x.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const pct = (x, d = 0) => (x * 100).toFixed(d) + "%";
+
+function table(headers, rows, highlight = []) {
+  const t = el("table");
+  t.append(el("thead", {}, [el("tr", {}, headers.map((h) => el("th", { textContent: h })))]));
+  t.append(el("tbody", {}, rows.map((r, i) => el("tr", highlight.includes(i) ? { className: "hl" } : {}, r.map((c) => el("td", { textContent: c }))))));
+  return t;
+}
+const kpi = (value, label) => el("div", {}, [el("b", { textContent: value }), el("span", { textContent: label })]);
+
+function render(o, units) {
+  const k = 1000 / units;
+  const card = (title, ...kids) => el("div", { className: "card" }, [el("h2", { textContent: title }), ...kids]);
+  const out = $("results");
+
+  const kpis = [
+    kpi(m2(o.price_per_1000), "Should-cost price per 1,000 (rough)"),
+    kpi(`${m2(o.low_per_1000)} – ${m2(o.high_per_1000)}`, "Bounding range per 1,000"),
+    kpi(m0(o.price), "Total price for the order"),
+    kpi(pct(o.material_total / o.cost), "Material share of cost"),
+  ];
+  if (o.quote_position) kpis.push(kpi(`${pct(o.quote_gap_pct)} ${o.quote_gap >= 0 ? "over" : "under"}`, `Quote vs. base (${o.quote_position} the range)`));
+  out.append(card("Result", el("div", { className: "kpi" }, kpis),
+    el("div", { className: "decision", textContent: o.decision }),
+    el("div", { className: "note", textContent: "A rough estimate. The range is an outer bound with every input at one extreme together, not a confidence interval." })));
+
+  out.append(card("Where the price comes from",
+    table(["Component", "Order total", "Per 1,000"], [
+      ["Material", m0(o.material_total), m2(o.material_total * k)],
+      ["Conversion", m0(o.conversion_total), m2(o.conversion_total * k)],
+      ["Tooling", m0(o.tooling_total), m2(o.tooling_total * k)],
+      ["Overhead", m0(o.overhead_total), m2(o.overhead_total * k)],
+      ["Margin", m0(o.margin_total), m2(o.margin_total * k)],
+      ["Price", m0(o.price), m2(o.price_per_1000)],
+    ], [5]),
+    el("p", { className: "sub", textContent: `Of the material and conversion above, ${m0(o.waste_cost)} (${m2(o.waste_cost * k)} per 1,000) is the cost of yield loss and setup waste.` })));
+
+  out.append(card("Step by step",
+    table(["Step", "Web in (m)", "Material", "Conversion", "Overhead", "Margin", "Price out", "Separate company"],
+      o.stages.map((s) => [s.step, one(s.input_length_m), m0(s.material_cost), m0(s.conversion_cost), m0(s.overhead), m0(s.margin), m0(s.price_out), s.is_handoff ? "yes" : "no"])),
+    el("p", { className: "sub", textContent: "Overhead and margin are taken where a step hands off to a separate company, and always at the last step. Inside one company the cost passes through and they are taken once, at the end." })));
+
+  const layers = Object.entries(o.material_by_layer);
+  out.append(card("Material by layer", table(["Layer", "Order total", "Per 1,000"], layers.map(([n, v]) => [n, m0(v), m2(v * k)]))));
+
+  out.append(card("What the answer leans on",
+    table(["Change", "Price per 1,000", "Change per 1,000"], [["Base case", m2(o.price_per_1000), "—"], ...o.sensitivity.map((s) => [s.label, m2(s.price_per_1000), (s.change_per_1000 >= 0 ? "+" : "") + m2(s.change_per_1000)])]),
+    el("p", { className: "sub", textContent: o.implied_margin !== null ? `At the modeled cost, the quote implies a margin of ${pct(o.implied_margin, 1)} of its price.` : "Enter a quoted price to see the implied margin." })));
+}
+
+// ---- boot -----------------------------------------------------------------
+loadCase(CASES.A);
+$("addMat").addEventListener("click", () => addMaterial());
+$("addStep").addEventListener("click", () => addStep());
+$("calc").addEventListener("click", calculate);
+$("loadA").addEventListener("click", () => { loadCase(CASES.A); calculate(); });
+$("loadB").addEventListener("click", () => { loadCase(CASES.B); calculate(); });
+$("loadC").addEventListener("click", () => { loadCase(CASES.C); calculate(); });
+
+try {
+  pyodide = await loadPyodide();
+  await loadPackage(pyodide);
+  $("status").textContent = "Ready.";
+  for (const id of ["calc", "loadA", "loadB", "loadC"]) $(id).disabled = false;
+  window.__ready = true;
+} catch (e) {
+  $("status").textContent = "Failed to load the calculator engine: " + e.message;
+}
+</script>
+</body>
+</html>
