@@ -13,6 +13,7 @@ Cost-modeling and operations-finance calculators for the space where Lean/Six Si
 | [Safety-Stock & Service-Level Cost Optimizer](web/calculator-safety-stock.html) | Built; `opstoolkit/safety_stock.py`, spec in `docs/specs/03-safety-stock.md` |
 | [Sample-Size & Cost-of-Testing Planner](web/calculator-sample-size.html) | Built; `opstoolkit/sample_size.py`, spec in `docs/specs/04-sample-size.md` |
 | [Process-Chain Should-Cost Builder](web/calculator-should-cost.html) | Built; `opstoolkit/should_cost.py`, spec in `docs/specs/05-flex-should-cost.md` |
+| Shared simulation helpers (library only, no page) | Built; `opstoolkit/simulation.py`, spec in `docs/specs/06-simulation-helpers.md`; prerequisite for the Monte Carlo tools |
 
 A "Which tool do I need?" table will go here as tools ship.
 
